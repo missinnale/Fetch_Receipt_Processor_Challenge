@@ -1,9 +1,8 @@
-from urllib import response
 import pytest
 from fastapi.testclient import TestClient
 from receipt_processor.main import app
 
-mock_receipt = '''{
+mock_receipt = {
     "retailer": "M&M Corner Market",
     "purchaseDate": "2022-03-20",
     "purchaseTime": "14:33",
@@ -23,17 +22,13 @@ mock_receipt = '''{
         }
     ],
     "total": "9.00"
-    }'''
-
-# post example date to process endpoint, check if id is returned in specified format
-
-# set up for get request, hit points endpoint with specific id, check correct points are calculated
+}
 
 client = TestClient(app)
 
 @pytest.fixture
 def receipt_id() -> str:
-    response = client.post('/receipts/process', content=mock_receipt)
+    response = client.post('/receipts/process', json=mock_receipt)
     return response.json()['id']
 
 def test_main():
@@ -41,11 +36,11 @@ def test_main():
     assert response.status_code == 200
 
 def test_process_receipt():
-    response = client.post('/receipts/process', content=mock_receipt)
-    assert response.status_code == 201
+    response = client.post('/receipts/process', json=mock_receipt)
+    assert response.status_code == 200
     assert response.json()['id']
 
-# receipt_id is a fixture that runs the post receipt first as a setup
+# receipt_id is a fixture that runs the post receipt first as a setup, so value is in memory
 def test_get_receipt_points(receipt_id: str):
     response = client.get(f'/receipts/{receipt_id}/points')
     assert response.status_code == 200
@@ -56,5 +51,15 @@ def test_get_receipt_points_failure():
     assert response.status_code == 404
 
 def test_process_receipt_failure():
-    response = client.post('/receipts/process', content='fail this')
+    response = client.post('/receipts/process', data={'fail_this': 'fail please'})
+    assert response.status_code == 400
+
+def test_process_receipt_future():
+    mock_receipt["purchaseDate"] = "2027-03-20"
+    response = client.post('/receipts/process', json=mock_receipt)
+    assert response.status_code == 400
+
+def test_process_receipt_invalid_time_pattern():
+    mock_receipt["purchaseTime"] = "9:23"
+    response = client.post('/receipts/process', json=mock_receipt)
     assert response.status_code == 400
